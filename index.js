@@ -1,4 +1,4 @@
-// index.js - ES Module Version
+// index.js - ES Module Version with Security Middleware
 
 // 1. Load Environment Variables (Supabase Keys)
 import dotenv from 'dotenv';
@@ -10,12 +10,16 @@ import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 
-// 3. Initialize External Connections
+// 3. Import Security Middleware
+import rateLimiter from './middleware/rateLimiter.js';
+import walletValidator from './middleware/walletValidator.js';
+
+// 4. Initialize External Connections
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// 4. Initialize Sui Client (Connect to the main network)
+// 5. Initialize Sui Client (Connect to the main network)
 const suiClient = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
 /**
@@ -41,14 +45,24 @@ async function fetchPackageNameFromSui(packageId) {
     }
 }
 
-// 5. Setup the Express Server
+// 6. Setup the Express Server
 const app = express();
+
+// Trust proxy - important for getting real IP addresses
+app.set('trust proxy', true);
+
 app.use(cors()); 
 app.use(express.json());
 
-// 6. Test Route
+// 7. Test Route
 app.get('/', (req, res) => {
-    res.json({ message: 'Sui-Wallet-App Backend is running and secure.' });
+    res.json({ 
+        message: 'Sui-Wallet-App Backend is running and secure.',
+        security: {
+            rateLimiting: 'enabled',
+            walletValidation: 'enabled'
+        }
+    });
 });
 
 // Determine status based on score
@@ -64,10 +78,10 @@ const determineStatus = (scamScore) => {
     }
 };
 
-// 7. API Endpoints
+// 8. API Endpoints
 
 /**
- * Check Reputation
+ * Check Reputation (No rate limiting needed for read operations)
  */
 app.post('/check-reputation', async (req, res) => {
     const { packageId } = req.body;
@@ -85,7 +99,11 @@ app.post('/check-reputation', async (req, res) => {
 
         if (error && error.code !== 'PGRST116') {
             console.error('Supabase Query Error:', error);
-            return res.status(500).json({ status: 'UNKNOWN', confidence: 0, message: 'Database lookup failed.' });
+            return res.status(500).json({ 
+                status: 'UNKNOWN', 
+                confidence: 0, 
+                message: 'Database lookup failed.' 
+            });
         }
         
         if (data) {
@@ -106,7 +124,12 @@ app.post('/check-reputation', async (req, res) => {
             });
 
         } else {
-            return res.json({ status: 'UNKNOWN', confidence: 0, packageId, name: 'Unrecorded Package' });
+            return res.json({ 
+                status: 'UNKNOWN', 
+                confidence: 0, 
+                packageId, 
+                name: 'Unrecorded Package' 
+            });
         }
         
     } catch (e) {
@@ -116,55 +139,79 @@ app.post('/check-reputation', async (req, res) => {
 });
 
 /**
- * Submit Vote
+ * Submit Vote (WITH RATE LIMITING AND WALLET VALIDATION)
  */
-app.post('/votes', async (req, res) => {
-    const { packageId, userAddress, voteType } = req.body;
+app.post('/votes', 
+    rateLimiter.middleware(),      // Apply rate limiting
+    walletValidator.middleware(),  // Apply wallet validation
+    async (req, res) => {
+        const { packageId, userAddress, voteType } = req.body;
 
-    if (!packageId || !userAddress || !['scam', 'legit'].includes(voteType)) {
-        return res.status(400).json({ error: 'Missing or invalid required fields' });
-    }
-
-    try {
-        const packageName = await fetchPackageNameFromSui(packageId);
-
-        await supabase
-            .from('packages')
-            .upsert({ 
-                package_id: packageId,
-                name: packageName 
-            }, { 
-                onConflict: 'package_id',
-                ignoreDuplicates: false 
+        if (!packageId || !userAddress || !['scam', 'legit'].includes(voteType)) {
+            return res.status(400).json({ 
+                error: 'Missing or invalid required fields' 
             });
-
-        const { error: voteError } = await supabase
-            .from('votes')
-            .insert([
-                { 
-                    package_id: packageId,
-                    user_address: userAddress,
-                    vote_type: voteType
-                }
-            ]);
-
-        if (voteError) {
-            if (voteError.code === '23505') {
-                return res.status(409).json({ success: false, message: 'User has already voted for this package.' });
-            }
-            throw voteError;
         }
 
-        res.json({ success: true, message: `Vote recorded successfully for: ${packageName}. Score updated.` });
+        try {
+            const packageName = await fetchPackageNameFromSui(packageId);
 
-    } catch (e) {
-        console.error('Voting API Error:', e);
-        res.status(500).json({ error: 'Internal Server Error during vote processing.' });
+            await supabase
+                .from('packages')
+                .upsert({ 
+                    package_id: packageId,
+                    name: packageName 
+                }, { 
+                    onConflict: 'package_id',
+                    ignoreDuplicates: false 
+                });
+
+            const { error: voteError } = await supabase
+                .from('votes')
+                .insert([
+                    { 
+                        package_id: packageId,
+                        user_address: userAddress,
+                        vote_type: voteType
+                    }
+                ]);
+
+            if (voteError) {
+                if (voteError.code === '23505') {
+                    return res.status(409).json({ 
+                        success: false, 
+                        message: 'User has already voted for this package.' 
+                    });
+                }
+                throw voteError;
+            }
+
+            // Include rate limit info in response
+            const response = {
+                success: true,
+                message: `Vote recorded successfully for: ${packageName}. Score updated.`,
+            };
+
+            // Add remaining votes info if available
+            if (req.rateLimitInfo) {
+                response.rateLimitInfo = {
+                    remainingVotesToday: req.rateLimitInfo.remaining
+                };
+            }
+
+            res.json(response);
+
+        } catch (e) {
+            console.error('Voting API Error:', e);
+            res.status(500).json({ 
+                error: 'Internal Server Error during vote processing.' 
+            });
+        }
     }
-});
+);
 
 /**
- * Verify Package (Admin)
+ * Verify Package (Admin - should add authentication in production)
  */
 app.post('/verify', async (req, res) => {
     const { packageId, source } = req.body;
@@ -199,17 +246,25 @@ app.post('/verify', async (req, res) => {
                 ignoreDuplicates: false 
             });
 
-        res.json({ success: true, message: `Package ${packageName} officially marked as verified by ${source}.` });
+        res.json({ 
+            success: true, 
+            message: `Package ${packageName} officially marked as verified by ${source}.` 
+        });
 
     } catch (e) {
         console.error('Verification API Error:', e);
-        res.status(500).json({ error: 'Internal Server Error during verification.' });
+        res.status(500).json({ 
+            error: 'Internal Server Error during verification.' 
+        });
     }
 });
 
-// 8. Start the Server
+// 9. Start the Server
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-    console.log(`\n Backend running on http://localhost:${PORT}`);
-    console.log(`   Database connection ready.`);
+    console.log(`\n✅ Backend running on http://localhost:${PORT}`);
+    console.log(`🔒 Security features:`);
+    console.log(`   - Rate Limiting: ENABLED`);
+    console.log(`   - Wallet Validation: ENABLED`);
+    console.log(`   - Database connection: READY\n`);
 });
