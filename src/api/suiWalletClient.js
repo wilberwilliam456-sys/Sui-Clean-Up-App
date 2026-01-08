@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use environment variable with proper fallback
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://sui-clean-up-api.onrender.com';
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -9,7 +9,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 second timeout
+  timeout: 30000, // 30 second timeout
 });
 
 // Add response interceptor for better error handling
@@ -32,10 +32,10 @@ export const checkReputation = async (packageId) => {
 
 export const submitVote = async (packageId, userAddress, voteType) => {
   try {
-    const response = await apiClient.post('/votes', { 
-      packageId, 
-      userAddress, 
-      voteType 
+    const response = await apiClient.post('/votes', {
+      packageId,
+      userAddress,
+      voteType
     });
     return response.data;
   } catch (error) {

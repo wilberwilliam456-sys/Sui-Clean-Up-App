@@ -1,14 +1,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import {
+  SuiClientProvider,
+  WalletProvider,
+  createNetworkConfig
+} from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
-import { createNetworkConfig } from '@mysten/dapp-kit';
 import '@mysten/dapp-kit/dist/index.css';
 import Home from './pages/Home.jsx';
 
-// Create a query client
-const queryClient = new QueryClient();
+// Create a query client with proper configuration
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
-// Configure network
+// Configure Sui networks
 const { networkConfig } = createNetworkConfig({
   mainnet: { url: getFullnodeUrl('mainnet') },
   testnet: { url: getFullnodeUrl('testnet') },
@@ -19,7 +29,20 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
-        <WalletProvider>
+        <WalletProvider
+          autoConnect={true}
+          enableUnsafeBurner={false}
+          /* Storage key for persisting wallet connection */
+          storageKey="sui-wallet-connection"
+          /* Enable wallet standard for mobile wallets */
+          preferredWallets={[
+            'Sui Wallet',
+            'Suiet',
+            'Ethos Wallet',
+            'Martian Sui Wallet',
+            'Phantom'
+          ]}
+        >
           <Home />
         </WalletProvider>
       </SuiClientProvider>
