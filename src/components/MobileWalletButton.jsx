@@ -20,20 +20,20 @@ function MobileWalletButton() {
 
         const mobileWallets = [...wallets];
 
-        // Ensure Sui Wallet is in the list for mobile (for deep linking)
-        if (!mobileWallets.find(w => w.name.includes('Sui Wallet'))) {
+        // Ensure Slush (formerly Sui Wallet) is in the list for mobile
+        if (!mobileWallets.find(w => w.name.toLowerCase().includes('slush') || w.name.toLowerCase().includes('sui wallet'))) {
             mobileWallets.push({
-                name: 'Sui Wallet',
-                icon: 'https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg', // Fallback icon
+                name: 'Slush',
+                icon: 'https://slush.app/favicon.ico',
                 isFallback: true
             });
         }
 
         // Ensure Phantom is in the list for mobile
-        if (!mobileWallets.find(w => w.name.includes('Phantom'))) {
+        if (!mobileWallets.find(w => w.name.toLowerCase().includes('phantom'))) {
             mobileWallets.push({
                 name: 'Phantom',
-                icon: 'https://ph-assets.imgix.net/f68df73a-4467-4fd7-951b-426b3cba1487?auto=compress&codec=mozjpeg&w=64',
+                icon: 'https://phantom.app/favicon.ico',
                 isFallback: true
             });
         }
@@ -61,14 +61,14 @@ function MobileWalletButton() {
     const detectMobileWallet = () => {
         const userAgent = navigator.userAgent.toLowerCase();
 
-        // Check if inside Sui Wallet mobile app
-        if (userAgent.includes('suiwallet')) {
-            return 'Sui Wallet (Mobile)';
+        // Check if inside Slush/Sui Wallet mobile app
+        if (userAgent.includes('suiwallet') || userAgent.includes('slush')) {
+            return 'Slush';
         }
 
         // Check if inside Phantom mobile app
         if (userAgent.includes('phantom')) {
-            return 'Phantom (Mobile)';
+            return 'Phantom';
         }
 
         return null;
@@ -77,27 +77,43 @@ function MobileWalletButton() {
     // Handle wallet connection
     const handleConnect = (wallet) => {
         console.log('🔌 Attempting to connect to:', wallet.name);
+        const walletNameLower = wallet.name.toLowerCase();
 
         // For mobile, try to open the wallet app
         if (isMobile) {
-            // Sui Wallet deep link
-            if (wallet.name.includes('Sui Wallet')) {
-                const deepLink = `suiwallet://dapp?url=${encodeURIComponent(window.location.href)}`;
-                window.location.href = deepLink;
+            // Slush/Sui Wallet deep link
+            if (walletNameLower.includes('slush') || walletNameLower.includes('sui wallet')) {
+                // Try the Slush/Sui Wallet deep link
+                const encodedUrl = encodeURIComponent(window.location.href);
+
+                // Try multiple deep link formats
+                const deepLinks = [
+                    `slush://dapp?url=${encodedUrl}`,
+                    `suiwallet://dapp?url=${encodedUrl}`,
+                    `https://slush.app/browse?url=${encodedUrl}`
+                ];
+
+                // Try the first deep link
+                window.location.href = deepLinks[0];
 
                 // Fallback: try to connect directly after a short delay
                 setTimeout(() => {
-                    connect({ wallet });
-                }, 1000);
+                    if (!wallet.isFallback) {
+                        connect({ wallet });
+                    }
+                }, 1500);
             }
             // Phantom deep link
-            else if (wallet.name.includes('Phantom')) {
-                const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(window.location.href)}?cluster=mainnet`;
+            else if (walletNameLower.includes('phantom')) {
+                const encodedUrl = encodeURIComponent(window.location.href);
+                const deepLink = `https://phantom.app/ul/browse/${encodedUrl}?cluster=mainnet`;
                 window.location.href = deepLink;
 
                 setTimeout(() => {
-                    connect({ wallet });
-                }, 1000);
+                    if (!wallet.isFallback) {
+                        connect({ wallet });
+                    }
+                }, 1500);
             }
             // Other wallets
             else {
@@ -183,7 +199,7 @@ function MobileWalletButton() {
                         {isMobile && (
                             <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                                 <p className="text-sm text-blue-300">
-                                    📱 Make sure you have Sui Wallet or Phantom app installed on your device
+                                    📱 Make sure you have Slush or Phantom app installed on your device
                                 </p>
                             </div>
                         )}
@@ -220,31 +236,49 @@ function MobileWalletButton() {
                                     {isMobile ? (
                                         <div className="space-y-2">
                                             <a
-                                                href="https://apps.apple.com/us/app/sui-wallet/id6451566835"
+                                                href="https://apps.apple.com/app/slush-sui-wallet/id6451566835"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="block bg-blue-600 text-white px-4 py-2 rounded-lg"
                                             >
-                                                📱 Download Sui Wallet (iOS)
+                                                📱 Download Slush (iOS)
                                             </a>
                                             <a
-                                                href="https://play.google.com/store/apps/details?id=com.suiwallet"
+                                                href="https://play.google.com/store/apps/details?id=com.mystenlabs.slush"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="block bg-green-600 text-white px-4 py-2 rounded-lg"
                                             >
-                                                📱 Download Sui Wallet (Android)
+                                                📱 Download Slush (Android)
+                                            </a>
+                                            <a
+                                                href="https://phantom.app/download"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block bg-purple-600 text-white px-4 py-2 rounded-lg"
+                                            >
+                                                👻 Download Phantom
                                             </a>
                                         </div>
                                     ) : (
-                                        <a
-                                            href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-400 hover:text-blue-300"
-                                        >
-                                            Install Sui Wallet Extension
-                                        </a>
+                                        <div className="space-y-2">
+                                            <a
+                                                href="https://chromewebstore.google.com/detail/slush-a-sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block text-blue-400 hover:text-blue-300"
+                                            >
+                                                Install Slush Extension
+                                            </a>
+                                            <a
+                                                href="https://phantom.app/download"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block text-purple-400 hover:text-purple-300"
+                                            >
+                                                Install Phantom Extension
+                                            </a>
+                                        </div>
                                     )}
                                 </div>
                             )}

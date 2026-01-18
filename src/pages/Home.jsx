@@ -67,7 +67,7 @@ function Home() {
             placeholder="Enter Package ID (e.g., 0x2)"
             value={packageId}
             onChange={(e) => setPackageId(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             className="w-full p-3 bg-transparent border-none outline-none text-white placeholder-gray-400 text-sm md:text-base"
           />
         </div>

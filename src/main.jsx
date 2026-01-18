@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import '@mysten/dapp-kit/dist/index.css';
@@ -25,7 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <WalletProvider
           autoConnect={true}
           enableUnsafeBurner={false}
-          preferredWallets={['Suiet', 'Sui Wallet', 'Phantom']}
+          preferredWallets={['Slush', 'Sui Wallet', 'Phantom']}
           storageAdapter={{
             getItem: (key) => {
               try {
