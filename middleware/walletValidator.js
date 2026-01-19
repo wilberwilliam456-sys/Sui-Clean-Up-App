@@ -45,19 +45,28 @@ class WalletValidator {
         };
       }
 
-      // 3. Check wallet age (optional - check first transaction timestamp)
-      const firstTx = transactions.data[0];
-      if (firstTx && firstTx.timestampMs) {
-        const walletAge = Date.now() - parseInt(firstTx.timestampMs);
-        const minAge = 24 * 60 * 60 * 1000; // 24 hours
+      // 3. Check wallet age
+      // We query the FIRST transaction ever made by this address (ascending order)
+      const oldestTransaction = await this.suiClient.queryTransactionBlocks({
+        filter: { FromAddress: userAddress },
+        limit: 1,
+        order: 'ascending'
+      });
 
-        if (walletAge < minAge) {
-          const hoursOld = Math.floor(walletAge / (60 * 60 * 1000));
-          return {
-            valid: false,
-            reason: 'WALLET_TOO_NEW',
-            message: `Wallet must be at least 24 hours old to vote. Your wallet is ${hoursOld} hours old.`
-          };
+      if (oldestTransaction.data && oldestTransaction.data.length > 0) {
+        const firstTx = oldestTransaction.data[0];
+        if (firstTx.timestampMs) {
+          const walletAge = Date.now() - parseInt(firstTx.timestampMs);
+          const minAge = 24 * 60 * 60 * 1000; // 24 hours
+
+          if (walletAge < minAge) {
+            const hoursOld = (walletAge / (60 * 60 * 1000)).toFixed(1);
+            return {
+              valid: false,
+              reason: 'WALLET_TOO_NEW',
+              message: `Wallet must be at least 24 hours old to vote. Your wallet is only ${hoursOld} hours old.`
+            };
+          }
         }
       }
 
@@ -81,7 +90,7 @@ class WalletValidator {
 
     } catch (error) {
       console.error('Wallet validation error:', error);
-      
+
       // If it's a network error, allow the vote but log the issue
       return {
         valid: true,
